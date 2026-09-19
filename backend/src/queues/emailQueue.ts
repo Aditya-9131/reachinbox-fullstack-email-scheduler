@@ -17,26 +17,33 @@ export interface EmailJobPayload {
   userId?: string | null;
 }
 
-export const emailQueue = new Queue<EmailJobPayload>(EMAIL_QUEUE_NAME, {
-  connection: redisConnectionOptions,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 5000,
-    },
-    removeOnComplete: {
-      count: 1000, // Keep history of last 1000 completed jobs in Redis for Bull-Board
-    },
-    removeOnFail: {
-      count: 1000,
-    },
-  },
-});
+export let emailQueue: Queue<EmailJobPayload>;
 
-emailQueue.on('error', (err) => {
-  logger.error('❌ BullMQ Queue Error:', { message: err.message });
-});
+export const initEmailQueue = () => {
+  if (!emailQueue) {
+    emailQueue = new Queue<EmailJobPayload>(EMAIL_QUEUE_NAME, {
+      connection: redisConnectionOptions,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: {
+          count: 1000,
+        },
+        removeOnFail: {
+          count: 1000,
+        },
+      },
+    });
+
+    emailQueue.on('error', (err) => {
+      logger.error('❌ BullMQ Queue Error:', { message: err.message });
+    });
+  }
+  return emailQueue;
+};
 
 /**
  * Add a single delayed email job to BullMQ
@@ -46,14 +53,15 @@ export const addEmailJob = async (
   delayMs: number = 0,
   customJobId?: string
 ) => {
+  const queue = emailQueue || initEmailQueue();
   const jobId = customJobId || `email_${payload.emailId}`;
-  
+
   const options: JobsOptions = {
     jobId,
     delay: Math.max(0, delayMs),
   };
 
-  const job = await emailQueue.add('send-email', payload, options);
+  const job = await queue.add('send-email', payload, options);
   logger.info(
     `📥 Enqueued Email Job [${job.id}] for ${payload.recipient} | Scheduled delay: ${Math.round(
       delayMs / 1000
@@ -66,8 +74,9 @@ export const addEmailJob = async (
  * Cancel/remove a scheduled email job from BullMQ
  */
 export const cancelEmailJob = async (emailId: string): Promise<boolean> => {
+  const queue = emailQueue || initEmailQueue();
   const jobId = `email_${emailId}`;
-  const job = await emailQueue.getJob(jobId);
+  const job = await queue.getJob(jobId);
   if (job) {
     await job.remove();
     logger.info(`🗑️ Removed job ${jobId} from BullMQ queue`);

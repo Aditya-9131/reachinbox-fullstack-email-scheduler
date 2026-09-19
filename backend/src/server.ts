@@ -5,46 +5,25 @@ import { logger } from './config/logger';
 import { apiRouter } from './routes';
 import { smtpService } from './services/smtpService';
 import { initElasticsearch } from './config/elasticsearch';
+import { initRedis, stopRedis } from './config/redis';
+import { initEmailQueue } from './queues/emailQueue';
 import { setupBullBoard } from './queues/bullBoard';
 import { startEmailWorker } from './queues/emailWorker';
 import { emailSchedulerService } from './services/emailSchedulerService';
 import { prisma } from './config/database';
 
-const app = express();
-
-// Middlewares
-app.use(
-  cors({
-    origin: '*',
-    credentials: true,
-  })
-);
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Mount BullMQ Live Dashboard UI
-const bullBoardRouter = setupBullBoard();
-app.use('/admin/queues', bullBoardRouter);
-
-// Mount API Routes
-app.use('/api', apiRouter);
-
-// Global Error Handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error('Unhandled Express Error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal Server Error',
-  });
-});
-
 const startServer = async () => {
   try {
     logger.info('🚀 Initializing ReachInbox Email Scheduler Service...');
 
+    // 0. Initialize Redis (Embedded memory server or external standalone Redis)
+    await initRedis();
+    initEmailQueue();
+
     // 1. Initialize Ethereal SMTP transporter
     await smtpService.init();
 
-    // 2. Initialize Elasticsearch index
+    // 2. Initialize Elasticsearch index (with graceful DB fallback)
     await initElasticsearch();
 
     // 3. Start BullMQ Email Worker
@@ -53,7 +32,34 @@ const startServer = async () => {
     // 4. Synchronize pending jobs for restart persistence
     await emailSchedulerService.syncPendingJobsOnStartup();
 
-    // 5. Start listening
+    // 5. Setup Express App
+    const app = express();
+
+    app.use(
+      cors({
+        origin: '*',
+        credentials: true,
+      })
+    );
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // Mount BullMQ Live Dashboard UI
+    const bullBoardRouter = setupBullBoard();
+    app.use('/admin/queues', bullBoardRouter);
+
+    // Mount API Routes
+    app.use('/api', apiRouter);
+
+    // Global Error Handler
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      logger.error('Unhandled Express Error:', err);
+      res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error',
+      });
+    });
+
+    // 6. Start listening
     const server = app.listen(config.PORT, () => {
       logger.info(`=======================================================`);
       logger.info(`⚡ ReachInbox Backend running on http://localhost:${config.PORT}`);
@@ -67,6 +73,7 @@ const startServer = async () => {
       logger.info(`Received ${signal}. Gracefully shutting down...`);
       await worker.close();
       await prisma.$disconnect();
+      await stopRedis();
       server.close(() => {
         logger.info('Server closed. Goodbye!');
         process.exit(0);

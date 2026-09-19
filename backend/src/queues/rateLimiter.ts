@@ -44,11 +44,14 @@ export class RateLimiter {
     const nextHourStart = this.getNextHourStart(now);
 
     try {
-      // Atomic increment in Redis with 2-hour TTL (7200s) to safely span boundary
-      const currentCount = await redisClient.incr(redisKey);
-      if (currentCount === 1) {
-        // Set TTL on first increment
-        await redisClient.expire(redisKey, 7200);
+      let currentCount = 1;
+      if (redisClient) {
+        // Atomic increment in Redis with 2-hour TTL (7200s) to safely span boundary
+        currentCount = await redisClient.incr(redisKey);
+        if (currentCount === 1) {
+          // Set TTL on first increment
+          await redisClient.expire(redisKey, 7200);
+        }
       }
 
       // Sync count asynchronously with DB for reporting / auditing
@@ -100,6 +103,7 @@ export class RateLimiter {
     const redisKey = `ratelimit:sender:${senderEmail}:${hourKey}`;
 
     try {
+      if (!redisClient) return { count: 0, hourKey };
       const countStr = await redisClient.get(redisKey);
       const count = countStr ? parseInt(countStr, 10) : 0;
       return { count, hourKey };
