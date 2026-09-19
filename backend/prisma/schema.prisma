@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  googleId  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emailJobs     EmailJob[]
+  campaigns     Campaign[]
+  slackConfigs  SlackConfig[]
+}
+
+model EmailJob {
+  id                 String    @id @default(uuid())
+  recipient          String
+  sender             String
+  subject            String
+  body               String
+  status             String    @default("SCHEDULED") // PENDING, SCHEDULED, PROCESSING, RATE_LIMITED_RESCHEDULED, SENT, FAILED, CANCELLED
+  scheduledAt        DateTime
+  sentAt             DateTime?
+  delaySeconds       Int       @default(2)
+  hourlyLimit        Int       @default(50)
+  attempts           Int       @default(0)
+  etherealPreviewUrl String?
+  messageId          String?
+  errorMessage       String?
+  
+  campaignId         String?
+  campaign           Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  
+  userId             String?
+  user               User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([sender])
+  @@index([userId])
+}
+
+model Campaign {
+  id          String     @id @default(uuid())
+  name        String
+  senderEmail String
+  totalLeads  Int        @default(0)
+  status      String     @default("ACTIVE") // ACTIVE, COMPLETED, PAUSED
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  emailJobs   EmailJob[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model SlackConfig {
+  id          String   @id @default(uuid())
+  userId      String?  @unique
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamName    String?
+  teamId      String?
+  channel     String?
+  webhookUrl  String?
+  accessToken String?
+  isConnected Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SenderQuota {
+  id            String   @id @default(uuid())
+  senderEmail   String
+  hourWindowKey String   // e.g. "2026-09-19-16"
+  count         Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([senderEmail, hourWindowKey])
+}
