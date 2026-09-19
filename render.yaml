@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: reachinbox-email-scheduler-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npx prisma db push && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: WORKER_CONCURRENCY
+        value: 5
+      - key: DEFAULT_DELAY_BETWEEN_EMAILS_MS
+        value: 2000
+      - key: MAX_EMAILS_PER_HOUR_PER_SENDER
+        value: 50
+      - key: CLIENT_URL
+        value: "*"
