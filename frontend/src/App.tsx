@@ -4,8 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 
-// Default Google OAuth Client ID for demo/testing
-const GOOGLE_CLIENT_ID = '382947291823-reachinbox.apps.googleusercontent.com';
+// Default Google OAuth Client ID for demo/testing or env override
+const GOOGLE_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '382947291823-reachinbox.apps.googleusercontent.com';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();

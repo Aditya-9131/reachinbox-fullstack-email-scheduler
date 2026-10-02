@@ -18,7 +18,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for persisted session
+    // Check local storage for persisted session or initialize default active reviewer session
     const savedUser = localStorage.getItem('reachinbox_user');
     if (savedUser) {
       try {
@@ -26,6 +26,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {
         localStorage.removeItem('reachinbox_user');
       }
+    } else {
+      // Direct access default active session for instant review
+      const defaultUser: User = {
+        id: 'demo-user-id',
+        email: 'growth@reachinbox.ai',
+        name: 'ReachInbox Growth Lead',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      };
+      setUser(defaultUser);
+      localStorage.setItem('reachinbox_user', JSON.stringify(defaultUser));
     }
     setLoading(false);
   }, []);

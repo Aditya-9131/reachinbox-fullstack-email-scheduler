@@ -14,5 +14,6 @@ emailRoutes.post('/parse-leads', upload.single('file'), (req, res) => emailContr
 emailRoutes.get('/scheduled', (req, res) => emailController.getScheduled(req, res));
 emailRoutes.get('/sent', (req, res) => emailController.getSent(req, res));
 emailRoutes.get('/search', (req, res) => emailController.search(req, res));
+emailRoutes.get('/:id/preview', (req, res) => emailController.getPreview(req, res));
 emailRoutes.get('/:id', (req, res) => emailController.getById(req, res));
 emailRoutes.delete('/:id', (req, res) => emailController.cancel(req, res));

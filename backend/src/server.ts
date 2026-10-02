@@ -20,6 +20,18 @@ const startServer = async () => {
     await initRedis();
     initEmailQueue();
 
+    // Ensure default demo user exists
+    await prisma.user.upsert({
+      where: { email: 'growth@reachinbox.ai' },
+      update: {},
+      create: {
+        id: 'demo-user-id',
+        email: 'growth@reachinbox.ai',
+        name: 'ReachInbox Growth Lead',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      },
+    });
+
     // 1. Initialize Ethereal SMTP transporter
     await smtpService.init();
 

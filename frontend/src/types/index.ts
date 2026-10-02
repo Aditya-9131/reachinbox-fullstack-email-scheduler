@@ -50,6 +50,8 @@ export interface DashboardStats {
     delayBetweenSendsSeconds: number;
     workerConcurrency: number;
     elasticsearchHealthy: boolean;
+    smtpMode?: string;
+    smtpHost?: string;
   };
   recentActivity: EmailJob[];
 }

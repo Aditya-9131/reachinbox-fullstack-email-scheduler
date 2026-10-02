@@ -15,6 +15,7 @@ export const startEmailWorker = () => {
     async (job: Job<EmailJobPayload>) => {
       const { emailId, recipient, sender, subject, body, hourlyLimit, delaySeconds, userId } = job.data;
       logger.info(`⚡ Processing Email Job [${job.id}] -> Recipient: ${recipient} | Sender: ${sender}`);
+      await job.log(`[START] Processing Email Job [${job.id}] for recipient: ${recipient} (sender: ${sender})`);
 
       // 1. Idempotency & Database Verification
       const emailRecord = await prisma.emailJob.findUnique({
@@ -23,16 +24,19 @@ export const startEmailWorker = () => {
 
       if (!emailRecord) {
         logger.warn(`⚠️ Email record ${emailId} not found in DB. Skipping job.`);
+        await job.log(`[SKIP] Email record ${emailId} not found in DB`);
         return { status: 'SKIPPED_NOT_FOUND' };
       }
 
       if (emailRecord.status === 'SENT') {
         logger.info(`ℹ️ Email ${emailId} was already sent. Skipping duplicate execution.`);
+        await job.log(`[IDEMPOTENCY] Email ${emailId} already marked as SENT. Skipping redundant execution.`);
         return { status: 'ALREADY_SENT', previewUrl: emailRecord.etherealPreviewUrl };
       }
 
       if (emailRecord.status === 'CANCELLED') {
         logger.info(`ℹ️ Email ${emailId} was cancelled by user. Skipping.`);
+        await job.log(`[CANCELLED] Email ${emailId} was cancelled by user`);
         return { status: 'CANCELLED' };
       }
 
@@ -46,6 +50,9 @@ export const startEmailWorker = () => {
 
         logger.warn(
           `🚨 Rate limit hit for sender '${sender}' (${rateLimitCheck.currentCount}/${effectiveLimit} emails this hour). Rescheduling to next window (${rateLimitCheck.nextHourStart.toISOString()}).`
+        );
+        await job.log(
+          `[RATE_LIMIT_HIT] Sender '${sender}' quota reached: ${rateLimitCheck.currentCount}/${effectiveLimit} this hour. Rescheduling with delay ${Math.round(nextWindowDelayMs / 1000)}s to window ${rateLimitCheck.nextHourStart.toISOString()}`
         );
 
         // Update database and Elasticsearch status
@@ -71,12 +78,14 @@ export const startEmailWorker = () => {
           currentCount: rateLimitCheck.currentCount,
           nextAvailableWindow: rateLimitCheck.nextHourStart,
         });
+        await job.log(`[SLACK_ALERT] Dispatched rate limit alert for ${sender}`);
 
         // Re-enqueue job delayed to start of next hour
-        await emailQueue.add('send-email', job.data, {
+        const rescheduledJob = await emailQueue.add('send-email', job.data, {
           delay: nextWindowDelayMs,
           jobId: `email_${emailId}_window_${rateLimitCheck.hourWindowKey}`,
         });
+        await job.log(`[RESCHEDULED] Job enqueued into next window as BullMQ job ID: ${rescheduledJob.id}`);
 
         return {
           status: 'RATE_LIMITED_RESCHEDULED',
@@ -84,21 +93,27 @@ export const startEmailWorker = () => {
         };
       }
 
+      await job.log(`[QUOTA_OK] Sender '${sender}' quota check passed (${rateLimitCheck.currentCount}/${effectiveLimit} emails in current hour window)`);
+
       // 3. Mark as Processing
       await prisma.emailJob.update({
         where: { id: emailId },
         data: { status: 'PROCESSING' },
       });
+      await job.log(`[DB_STATUS] Updated email state to PROCESSING`);
 
       // 4. Mimic provider throttling delay between individual sends
       const throttleDelayMs = (delaySeconds ?? 2) * 1000;
       if (throttleDelayMs > 0) {
+        await job.log(`[THROTTLING] Applying provider delay of ${throttleDelayMs}ms`);
         await new Promise((resolve) => setTimeout(resolve, throttleDelayMs));
       }
 
       // 5. Send Email via Ethereal SMTP
       try {
+        await job.log(`[SMTP] Dispatching email via Ethereal SMTP transporter`);
         const sendResult = await smtpService.sendEmail({
+          emailId,
           from: sender,
           to: recipient,
           subject,
@@ -107,7 +122,8 @@ export const startEmailWorker = () => {
         });
 
         const sentAt = new Date();
-        const previewUrl = sendResult.previewUrl || undefined;
+        const previewUrl = sendResult.previewUrl || null;
+        await job.log(`[SMTP_SUCCESS] Message accepted. MessageId: ${sendResult.messageId} | Preview: ${previewUrl || 'N/A'}`);
 
         // 6. Update DB record to SENT
         await prisma.emailJob.update({
@@ -120,6 +136,7 @@ export const startEmailWorker = () => {
             attempts: { increment: 1 },
           },
         });
+        await job.log(`[DB_STATUS] Updated email state to SENT`);
 
         // 7. Update Elasticsearch
         await elasticsearchService.updateEmail(emailId, {
@@ -129,6 +146,8 @@ export const startEmailWorker = () => {
         });
 
         logger.info(`✨ Successfully delivered email [${emailId}] to ${recipient}`);
+        await job.log(`[COMPLETE] Email [${emailId}] delivered successfully`);
+
         return {
           status: 'SENT',
           messageId: sendResult.messageId,
@@ -136,6 +155,7 @@ export const startEmailWorker = () => {
         };
       } catch (sendError: any) {
         logger.error(`❌ Failed to send email [${emailId}] to ${recipient}:`, sendError);
+        await job.log(`[ERROR] Send failed: ${sendError.message}`);
 
         await prisma.emailJob.update({
           where: { id: emailId },

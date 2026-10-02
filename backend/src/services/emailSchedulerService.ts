@@ -38,7 +38,14 @@ export class EmailSchedulerService {
     const delaySeconds = input.delaySeconds ?? 2;
     const hourlyLimit = input.hourlyLimit ?? 50;
 
-    // 1. Create DB record
+    // 1. Verify User existence for safe foreign key assignment
+    let validUserId: string | null = null;
+    if (input.userId) {
+      const user = await prisma.user.findUnique({ where: { id: input.userId } });
+      if (user) validUserId = user.id;
+    }
+
+    // Create DB record
     const emailJob = await prisma.emailJob.create({
       data: {
         sender: input.sender,
@@ -50,7 +57,7 @@ export class EmailSchedulerService {
         delaySeconds,
         hourlyLimit,
         campaignId: input.campaignId,
-        userId: input.userId,
+        userId: validUserId,
       },
     });
 
@@ -99,7 +106,14 @@ export class EmailSchedulerService {
     const now = Date.now();
     const baseDelayMs = Math.max(0, baseTimestamp - now);
 
-    // 1. Create Campaign record if needed
+    // 1. Verify User existence for safe foreign key assignment
+    let validUserId: string | null = null;
+    if (userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (user) validUserId = user.id;
+    }
+
+    // Create Campaign record if needed
     let campaign = null;
     if (campaignName || recipients.length > 1) {
       campaign = await prisma.campaign.create({
@@ -107,7 +121,7 @@ export class EmailSchedulerService {
           name: campaignName || `Campaign - ${new Date().toLocaleDateString()}`,
           senderEmail: sender,
           totalLeads: recipients.length,
-          userId: userId || null,
+          userId: validUserId,
         },
       });
     }
@@ -135,7 +149,7 @@ export class EmailSchedulerService {
           delaySeconds,
           hourlyLimit,
           campaignId: campaign ? campaign.id : null,
-          userId: userId || null,
+          userId: validUserId,
         },
       });
 

@@ -67,12 +67,14 @@ export class StatsController {
       const processedTotal = sentCount + failedCount;
       const successRate = processedTotal > 0 ? Math.round((sentCount / processedTotal) * 100) : 100;
 
-      // Rate limit config
+      // Rate limit and SMTP config
       const rateLimitInfo = {
         hourlyLimitPerSender: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
         delayBetweenSendsSeconds: Math.round(config.DEFAULT_DELAY_BETWEEN_EMAILS_MS / 1000),
         workerConcurrency: config.WORKER_CONCURRENCY,
         elasticsearchHealthy: isElasticsearchAvailable,
+        smtpMode: config.SMTP_MODE,
+        smtpHost: config.SMTP_HOST,
       };
 
       return res.json({

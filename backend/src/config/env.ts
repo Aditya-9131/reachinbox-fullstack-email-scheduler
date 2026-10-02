@@ -36,7 +36,14 @@ export const config = {
   SLACK_REDIRECT_URI: process.env.SLACK_REDIRECT_URI || 'http://localhost:5000/api/slack/oauth/callback',
   DEFAULT_SLACK_WEBHOOK_URL: process.env.DEFAULT_SLACK_WEBHOOK_URL || '',
   
-  // Ethereal SMTP
-  ETHEREAL_USER: process.env.ETHEREAL_USER || '',
-  ETHEREAL_PASS: process.env.ETHEREAL_PASS || '',
+  // SMTP / Ethereal Configuration
+  SMTP_MODE: (process.env.SMTP_MODE || (process.env.SMTP_HOST && process.env.SMTP_HOST !== 'smtp.ethereal.email' ? 'real' : 'fake')).toLowerCase(), // 'real' | 'ethereal' | 'fake'
+  SMTP_HOST: process.env.SMTP_HOST || 'smtp.ethereal.email',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_SECURE: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
+  SMTP_USER: process.env.SMTP_USER || process.env.ETHEREAL_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || process.env.ETHEREAL_PASS || '',
+  SMTP_FROM: process.env.SMTP_FROM || '',
+  ETHEREAL_USER: process.env.ETHEREAL_USER || process.env.SMTP_USER || '',
+  ETHEREAL_PASS: process.env.ETHEREAL_PASS || process.env.SMTP_PASS || '',
 };

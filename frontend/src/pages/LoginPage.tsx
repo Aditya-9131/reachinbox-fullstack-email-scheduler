@@ -118,11 +118,14 @@ export const LoginPage: React.FC = () => {
             <button
               onClick={handleDemoLogin}
               disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-medium text-xs shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2 transition-all active:scale-98"
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-semibold text-xs shadow-lg shadow-blue-500/25 flex items-center justify-center space-x-2 transition-all active:scale-98"
             >
               <span>Instant Reviewer Sign-In (Demo Profile)</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+            <p className="text-[11px] text-slate-400 text-center">
+              💡 <span className="text-slate-300">Fast-track Interview Review:</span> Click the button above to enter the full dashboard with zero configuration required.
+            </p>
           </div>
 
           {/* Feature Highlights */}
